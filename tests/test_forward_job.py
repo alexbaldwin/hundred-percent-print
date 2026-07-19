@@ -10,6 +10,7 @@ from pathlib import Path, PurePath
 from unittest.mock import patch
 
 from hundred_percent_print.forward_job import (
+    _log_info,
     build_forward_command,
     main,
     parse_pdfinfo_page_size,
@@ -19,6 +20,10 @@ from hundred_percent_print.options import PrintSettings
 
 
 class ForwardJobTests(unittest.TestCase):
+    def test_logging_pipe_failure_does_not_fail_the_job(self) -> None:
+        with patch("builtins.print", side_effect=BrokenPipeError):
+            _log_info("Forwarding dry-run job")
+
     def test_forward_command_uses_locked_options(self) -> None:
         command = build_forward_command(
             PrintSettings(upstream_queue="Canon_TR150_series", media="Letter"),

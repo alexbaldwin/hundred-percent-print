@@ -569,13 +569,20 @@ def write_job_log(event: dict[str, Any]) -> None:
 
 
 def _log_info(message: str) -> None:
-    for line in message.splitlines():
-        print(f"INFO: {line}", file=sys.stderr)
+    _emit_log("INFO", message)
 
 
 def _log_error(message: str) -> None:
-    for line in message.splitlines():
-        print(f"ERROR: {line}", file=sys.stderr)
+    _emit_log("ERROR", message)
+
+
+def _emit_log(level: str, message: str) -> None:
+    try:
+        for line in message.splitlines():
+            print(f"{level}: {line}", file=sys.stderr)
+    except OSError:
+        # A closed diagnostic stream must never change print-job status.
+        return
 
 
 if __name__ == "__main__":

@@ -412,7 +412,7 @@ def cmd_self_test(args: argparse.Namespace) -> int:
             "--forward-dry-run",
         ]
         if args.mode == "cups":
-            command.extend(["--cups-frontend-queue", cups_queue])
+            command.extend(["--cups-frontend-queue", cups_queue, "--no-airprint-advertise"])
         if args.page_size:
             command.extend(["--page-size", args.page_size])
         if args.resolution:
