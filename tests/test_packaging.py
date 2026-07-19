@@ -40,6 +40,7 @@ class PackagingTests(unittest.TestCase):
         self.assertIn("HPP_UPSTREAM_DEVICE_URI", compose)
         self.assertIn("./data:/data", compose)
         self.assertIn("ghcr.io/alexbaldwin/hundred-percent-print:latest", compose)
+        self.assertNotIn("build:", compose)
 
     def test_publish_workflow_builds_intel_and_arm_images(self) -> None:
         workflow = (REPO_ROOT / ".github" / "workflows" / "publish-container.yml").read_text(

@@ -69,7 +69,8 @@ The container IP must be unused, outside your DHCP pool if possible, and reachab
 Use Container Manager's Project flow and provide the edited Compose file. If you deploy over SSH instead:
 
 ```sh
-docker compose -f deploy/compose.synology-macvlan.yml up -d --build
+docker compose -f deploy/compose.synology-macvlan.yml pull
+docker compose -f deploy/compose.synology-macvlan.yml up -d
 ```
 
 If macvlan is not possible, use `deploy/compose.synology-host.yml`. Host networking can work, but it shares the NAS ports; if CUPS or mDNS is already bound on the NAS, the container should fail early instead of advertising a broken AirPrint printer.

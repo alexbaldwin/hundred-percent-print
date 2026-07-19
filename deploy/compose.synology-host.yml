@@ -9,8 +9,6 @@ name: hundred-percent-print
 services:
   hundred-percent-print:
     image: ghcr.io/alexbaldwin/hundred-percent-print:latest
-    build:
-      context: ..
     container_name: hundred-percent-print
     network_mode: host
     restart: unless-stopped
