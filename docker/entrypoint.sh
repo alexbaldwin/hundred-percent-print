@@ -66,18 +66,24 @@ start_cups() {
     cupsctl --share-printers --remote-any >/dev/null || die "could not enable CUPS printer sharing"
 }
 
+hold_upstream_queue() {
+    cupsdisable "$HPP_UPSTREAM_QUEUE" >/dev/null 2>&1 || true
+    cupsreject "$HPP_UPSTREAM_QUEUE" >/dev/null 2>&1 || true
+}
+
 configure_upstream_queue() {
     if [ -n "${HPP_UPSTREAM_DEVICE_URI:-}" ] && [ "${HPP_SKIP_UPSTREAM_SETUP:-0}" != "1" ]; then
         log "Configuring upstream CUPS queue ${HPP_UPSTREAM_QUEUE} at ${HPP_UPSTREAM_DEVICE_URI}."
+        hold_upstream_queue
         if ! timeout -k 5 "$HPP_UPSTREAM_SETUP_TIMEOUT" lpadmin \
             -p "$HPP_UPSTREAM_QUEUE" \
-            -E \
             -v "$HPP_UPSTREAM_DEVICE_URI" \
             -m "${HPP_UPSTREAM_MODEL:-everywhere}" \
             -D "${HPP_UPSTREAM_DESCRIPTION:-Exact-scale upstream printer}" \
             -L "${HPP_UPSTREAM_LOCATION:-LAN}" \
             -o printer-is-shared=false \
             -o printer-error-policy=abort-job; then
+            hold_upstream_queue
             log "WARNING: could not configure upstream queue ${HPP_UPSTREAM_QUEUE}."
             return 1
         fi
@@ -97,15 +103,18 @@ configure_upstream_queue() {
             -o "cupsPrintQuality=$HPP_PRINT_QUALITY" \
             -o "MediaType=$HPP_MEDIA_TYPE" \
             -o print-quality=5; then
+            hold_upstream_queue
             log "WARNING: could not set exact-scale defaults on upstream queue ${HPP_UPSTREAM_QUEUE}."
             return 1
         fi
 
         if ! cupsenable "$HPP_UPSTREAM_QUEUE"; then
+            cupsreject "$HPP_UPSTREAM_QUEUE" >/dev/null 2>&1 || true
             log "WARNING: could not enable upstream queue ${HPP_UPSTREAM_QUEUE}."
             return 1
         fi
         if ! cupsaccept "$HPP_UPSTREAM_QUEUE"; then
+            hold_upstream_queue
             log "WARNING: upstream queue ${HPP_UPSTREAM_QUEUE} is not accepting jobs."
             return 1
         fi
@@ -214,7 +223,7 @@ HPP_UPSTREAM_SETUP_TIMEOUT="${HPP_UPSTREAM_SETUP_TIMEOUT:-15}"
 require_positive_integer HPP_UPSTREAM_RETRY_SECONDS "$HPP_UPSTREAM_RETRY_SECONDS"
 require_positive_integer HPP_UPSTREAM_SETUP_TIMEOUT "$HPP_UPSTREAM_SETUP_TIMEOUT"
 
-for required in dbus-daemon avahi-daemon cupsd cupsctl lpadmin lpoptions cupsenable cupsaccept lpstat ippeveprinter ipptool pdfinfo qpdf timeout; do
+for required in dbus-daemon avahi-daemon cupsd cupsctl lpadmin lpoptions cupsenable cupsdisable cupsaccept cupsreject lpstat ippeveprinter ipptool pdfinfo qpdf timeout; do
     command_exists "$required" || die "required command is missing from the container image: ${required}"
 done
 

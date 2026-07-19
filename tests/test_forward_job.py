@@ -21,7 +21,9 @@ from hundred_percent_print.options import PrintSettings
 
 class ForwardJobTests(unittest.TestCase):
     def test_logging_pipe_failure_does_not_fail_the_job(self) -> None:
-        with patch("builtins.print", side_effect=BrokenPipeError):
+        closed_stream = io.StringIO()
+        closed_stream.close()
+        with patch("sys.stderr", closed_stream):
             _log_info("Forwarding dry-run job")
 
     def test_forward_command_uses_locked_options(self) -> None:

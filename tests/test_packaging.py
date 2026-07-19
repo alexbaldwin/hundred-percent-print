@@ -52,6 +52,9 @@ class PackagingTests(unittest.TestCase):
         self.assertIn("/run/dbus/system_bus_socket:/run/dbus/system_bus_socket:ro", compose)
         self.assertIn("retry_upstream_queue", entrypoint)
         self.assertIn("rm -f /run/avahi-daemon/pid", entrypoint)
+        self.assertNotIn('-p "$HPP_UPSTREAM_QUEUE" \\\n            -E', entrypoint)
+        self.assertIn('cupsdisable "$HPP_UPSTREAM_QUEUE"', entrypoint)
+        self.assertIn('cupsreject "$HPP_UPSTREAM_QUEUE"', entrypoint)
         self.assertIn("require_positive_integer HPP_UPSTREAM_RETRY_SECONDS", entrypoint)
         self.assertIn("require_positive_integer HPP_UPSTREAM_SETUP_TIMEOUT", entrypoint)
 

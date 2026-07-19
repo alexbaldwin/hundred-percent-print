@@ -580,7 +580,7 @@ def _emit_log(level: str, message: str) -> None:
     try:
         for line in message.splitlines():
             print(f"{level}: {line}", file=sys.stderr)
-    except OSError:
+    except (OSError, ValueError):
         # A closed diagnostic stream must never change print-job status.
         return
 
