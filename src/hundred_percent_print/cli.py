@@ -84,6 +84,11 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Do not publish an explicit AirPrint _universal DNS-SD service when --mode=cups.",
     )
+    serve.add_argument(
+        "--allow-missing-upstream",
+        action="store_true",
+        help="Start safely while the upstream queue is unavailable; real jobs remain fail-closed.",
+    )
     serve.add_argument("--port", type=int, default=DEFAULT_PORT, help="IPP port for the local proxy.")
     serve.add_argument("--spool", type=Path, default=default_spool_dir(), help="Directory for ippeveprinter spool files.")
     serve.add_argument("--job-log", type=Path, default=default_job_log(), help="JSONL log path for forwarded jobs.")
@@ -175,6 +180,11 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Do not publish an explicit AirPrint _universal DNS-SD service when --mode=cups.",
     )
+    launch_agent.add_argument(
+        "--allow-missing-upstream",
+        action="store_true",
+        help="Start safely while the upstream queue is unavailable.",
+    )
     launch_agent.add_argument("--port", type=int, default=DEFAULT_PORT, help="IPP port for the local proxy.")
     launch_agent.add_argument("--label", default="com.hundred-percent-print.server", help="LaunchAgent label.")
     launch_agent.add_argument("--spool", type=Path, default=default_spool_dir(), help="Directory for server spool files.")
@@ -211,10 +221,17 @@ def cmd_discover(args: argparse.Namespace) -> int:
 
 
 def cmd_serve(args: argparse.Namespace) -> int:
-    if not destination_exists(args.upstream):
+    upstream_exists = destination_exists(args.upstream)
+    if not upstream_exists and not getattr(args, "allow_missing_upstream", False):
         print(f"Upstream CUPS destination not found: {args.upstream}", file=sys.stderr)
         print("Run `hundred-percent-print discover` to list available queues.", file=sys.stderr)
         return 2
+    if not upstream_exists:
+        print(
+            f"WARNING: upstream CUPS destination {args.upstream!r} is unavailable; "
+            "the server will start, but real jobs will be rejected until it appears.",
+            file=sys.stderr,
+        )
 
     settings = settings_from_args(args, upstream=args.upstream)
     args.spool.mkdir(parents=True, exist_ok=True)
@@ -493,6 +510,8 @@ def launch_agent_plist(args: argparse.Namespace) -> dict[str, object]:
         program_args.extend(["--airprint-name", args.airprint_name])
         if args.no_airprint_advertise:
             program_args.append("--no-airprint-advertise")
+    if getattr(args, "allow_missing_upstream", False):
+        program_args.append("--allow-missing-upstream")
     if args.page_size:
         program_args.extend(["--page-size", args.page_size])
     if args.resolution:

@@ -23,6 +23,8 @@ The forwarder also validates incoming PDF page size before forwarding. For Lette
 
 The forwarder fails closed. Empty files, malformed PDFs, unsupported content types, and non-PDF documents are rejected before they reach the Canon queue. Real print jobs also preflight the upstream CUPS destination before running `lp`; if the Canon queue is missing, disabled, or not accepting requests, the job log records `status=upstream-unavailable` and no Canon job is queued.
 
+Docker deployments can opt into `HPP_ALLOW_OFFLINE_START=1`. This keeps AirPrint discovery available while the physical printer is powered off, retries driverless Canon queue setup in the background, and continues rejecting real jobs until that queue is ready. Offline startup does not weaken the forwarder's upstream preflight.
+
 ## Quick Start
 
 Run from this repo without installing into system Python:

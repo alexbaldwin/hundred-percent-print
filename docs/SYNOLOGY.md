@@ -123,11 +123,15 @@ HPP_MEDIA=Letter
 HPP_PAGE_SIZE=Letter
 HPP_AIRPRINT_NAME=100 Percent Pattern Print SAFE
 HPP_KEEP_SPOOL=1
+HPP_ALLOW_OFFLINE_START=1
+HPP_UPSTREAM_RETRY_SECONDS=30
 HPP_FORWARD_DRY_RUN=1
 HPP_EXTRA_OPTIONS=InputSlot=Rear
 ```
 
 Use `HPP_FORWARD_DRY_RUN=1` when validating discovery and job capture without paper. Remove it for production printing.
+
+With `HPP_ALLOW_OFFLINE_START=1`, the AirPrint service can start while the physical printer is powered off. Real jobs still fail closed while the upstream queue is unavailable, and the container retries driverless queue setup every `HPP_UPSTREAM_RETRY_SECONDS` seconds until the printer comes online.
 
 ## Security
 
