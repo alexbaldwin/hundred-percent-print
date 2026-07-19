@@ -14,6 +14,14 @@ command_exists() {
     command -v "$1" >/dev/null 2>&1
 }
 
+require_positive_integer() {
+    name="$1"
+    value="$2"
+    case "$value" in
+        ""|0|*[!0-9]*) die "${name} must be a positive integer, got ${value:-empty}" ;;
+    esac
+}
+
 wait_for_cups() {
     attempts=0
     while [ "$attempts" -lt 50 ]; do
@@ -48,6 +56,7 @@ start_avahi() {
     fi
 
     mkdir -p /run/avahi-daemon
+    rm -f /run/avahi-daemon/pid
     avahi-daemon --daemonize --no-chroot || die "could not start avahi-daemon; use macvlan networking or set HPP_START_AVAHI=0 if another mDNS publisher is providing AirPrint"
 }
 
@@ -57,21 +66,29 @@ start_cups() {
     cupsctl --share-printers --remote-any >/dev/null || die "could not enable CUPS printer sharing"
 }
 
+hold_upstream_queue() {
+    cupsdisable "$HPP_UPSTREAM_QUEUE" >/dev/null 2>&1 || true
+    cupsreject "$HPP_UPSTREAM_QUEUE" >/dev/null 2>&1 || true
+}
+
 configure_upstream_queue() {
     if [ -n "${HPP_UPSTREAM_DEVICE_URI:-}" ] && [ "${HPP_SKIP_UPSTREAM_SETUP:-0}" != "1" ]; then
         log "Configuring upstream CUPS queue ${HPP_UPSTREAM_QUEUE} at ${HPP_UPSTREAM_DEVICE_URI}."
-        lpadmin \
+        hold_upstream_queue
+        if ! timeout -k 5 "$HPP_UPSTREAM_SETUP_TIMEOUT" lpadmin \
             -p "$HPP_UPSTREAM_QUEUE" \
-            -E \
             -v "$HPP_UPSTREAM_DEVICE_URI" \
             -m "${HPP_UPSTREAM_MODEL:-everywhere}" \
             -D "${HPP_UPSTREAM_DESCRIPTION:-Exact-scale upstream printer}" \
             -L "${HPP_UPSTREAM_LOCATION:-LAN}" \
             -o printer-is-shared=false \
-            -o printer-error-policy=abort-job \
-            || die "could not configure upstream queue ${HPP_UPSTREAM_QUEUE}"
+            -o printer-error-policy=abort-job; then
+            hold_upstream_queue
+            log "WARNING: could not configure upstream queue ${HPP_UPSTREAM_QUEUE}."
+            return 1
+        fi
 
-        lpoptions \
+        if ! lpoptions \
             -p "$HPP_UPSTREAM_QUEUE" \
             -o print-scaling=none \
             -o fit-to-page=false \
@@ -85,19 +102,45 @@ configure_upstream_queue() {
             -o "ColorModel=$HPP_COLOR_MODEL" \
             -o "cupsPrintQuality=$HPP_PRINT_QUALITY" \
             -o "MediaType=$HPP_MEDIA_TYPE" \
-            -o print-quality=5 \
-            || die "could not set exact-scale defaults on upstream queue ${HPP_UPSTREAM_QUEUE}"
+            -o print-quality=5; then
+            hold_upstream_queue
+            log "WARNING: could not set exact-scale defaults on upstream queue ${HPP_UPSTREAM_QUEUE}."
+            return 1
+        fi
 
-        cupsenable "$HPP_UPSTREAM_QUEUE" || die "could not enable upstream queue ${HPP_UPSTREAM_QUEUE}"
-        cupsaccept "$HPP_UPSTREAM_QUEUE" || die "upstream queue ${HPP_UPSTREAM_QUEUE} is not accepting jobs"
+        if ! cupsenable "$HPP_UPSTREAM_QUEUE"; then
+            cupsreject "$HPP_UPSTREAM_QUEUE" >/dev/null 2>&1 || true
+            log "WARNING: could not enable upstream queue ${HPP_UPSTREAM_QUEUE}."
+            return 1
+        fi
+        if ! cupsaccept "$HPP_UPSTREAM_QUEUE"; then
+            hold_upstream_queue
+            log "WARNING: upstream queue ${HPP_UPSTREAM_QUEUE} is not accepting jobs."
+            return 1
+        fi
     fi
 
     if ! lpstat -v "$HPP_UPSTREAM_QUEUE" >/dev/null 2>&1; then
-        die "upstream queue ${HPP_UPSTREAM_QUEUE} does not exist. Set HPP_UPSTREAM_DEVICE_URI, or set HPP_SKIP_UPSTREAM_SETUP=1 only after creating the queue yourself."
+        log "WARNING: upstream queue ${HPP_UPSTREAM_QUEUE} does not exist."
+        return 1
     fi
+
+    return 0
+}
+
+retry_upstream_queue() {
+    while :; do
+        sleep "$HPP_UPSTREAM_RETRY_SECONDS"
+        if configure_upstream_queue; then
+            log "Upstream queue ${HPP_UPSTREAM_QUEUE} is ready."
+            return 0
+        fi
+        log "Upstream queue is still unavailable; retrying in ${HPP_UPSTREAM_RETRY_SECONDS} seconds."
+    done
 }
 
 run_server() {
+    needs_upstream_retry="$1"
     set -- hundred-percent-print serve \
         --upstream "$HPP_UPSTREAM_QUEUE" \
         --media "$HPP_MEDIA" \
@@ -125,9 +168,30 @@ run_server() {
     if [ "${HPP_NO_AIRPRINT_ADVERTISE:-0}" = "1" ]; then
         set -- "$@" --no-airprint-advertise
     fi
+    if [ "$HPP_ALLOW_OFFLINE_START" = "1" ]; then
+        set -- "$@" --allow-missing-upstream
+    fi
 
     log "Starting exact-scale AirPrint proxy."
-    exec "$@"
+    "$@" &
+    server_pid=$!
+    retry_pid=""
+    if [ "$needs_upstream_retry" = "1" ]; then
+        retry_upstream_queue &
+        retry_pid=$!
+    fi
+
+    trap 'kill "$server_pid" 2>/dev/null || true; if [ -n "$retry_pid" ]; then kill "$retry_pid" 2>/dev/null || true; fi' INT TERM HUP
+    if wait "$server_pid"; then
+        status=0
+    else
+        status=$?
+    fi
+    if [ -n "$retry_pid" ]; then
+        kill "$retry_pid" 2>/dev/null || true
+        wait "$retry_pid" 2>/dev/null || true
+    fi
+    return "$status"
 }
 
 case "${1:-}" in
@@ -152,8 +216,14 @@ HPP_BACKEND_NAME="${HPP_BACKEND_NAME:-Hundred Percent Print Private Backend}"
 HPP_PORT="${HPP_PORT:-8799}"
 HPP_SPOOL="${HPP_SPOOL:-/data/spool}"
 HPP_JOB_LOG="${HPP_JOB_LOG:-/data/jobs.jsonl}"
+HPP_ALLOW_OFFLINE_START="${HPP_ALLOW_OFFLINE_START:-0}"
+HPP_UPSTREAM_RETRY_SECONDS="${HPP_UPSTREAM_RETRY_SECONDS:-30}"
+HPP_UPSTREAM_SETUP_TIMEOUT="${HPP_UPSTREAM_SETUP_TIMEOUT:-15}"
 
-for required in dbus-daemon avahi-daemon cupsd cupsctl lpadmin lpoptions cupsenable cupsaccept lpstat ippeveprinter ipptool pdfinfo qpdf; do
+require_positive_integer HPP_UPSTREAM_RETRY_SECONDS "$HPP_UPSTREAM_RETRY_SECONDS"
+require_positive_integer HPP_UPSTREAM_SETUP_TIMEOUT "$HPP_UPSTREAM_SETUP_TIMEOUT"
+
+for required in dbus-daemon avahi-daemon cupsd cupsctl lpadmin lpoptions cupsenable cupsdisable cupsaccept cupsreject lpstat ippeveprinter ipptool pdfinfo qpdf timeout; do
     command_exists "$required" || die "required command is missing from the container image: ${required}"
 done
 
@@ -161,5 +231,12 @@ link_persistent_runtime_dirs
 start_dbus
 start_avahi
 start_cups
-configure_upstream_queue
-run_server
+needs_upstream_retry=0
+if ! configure_upstream_queue; then
+    if [ "$HPP_ALLOW_OFFLINE_START" != "1" ]; then
+        die "upstream queue ${HPP_UPSTREAM_QUEUE} is unavailable and offline startup is disabled"
+    fi
+    needs_upstream_retry=1
+    log "Starting in offline-safe mode; real jobs remain blocked until the upstream queue is ready."
+fi
+run_server "$needs_upstream_retry"

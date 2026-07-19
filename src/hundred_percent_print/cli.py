@@ -31,6 +31,8 @@ DEFAULT_PORT = 8799
 DEFAULT_FRONTEND_QUEUE = "Hundred_Percent_Patterns"
 DEFAULT_BACKEND_SERVICE_NAME = "Hundred Percent Print Private Backend"
 DEFAULT_AIRPRINT_SERVICE_NAME = "100 Percent Pattern Print SAFE"
+CUPS_FRONTEND_RETRY_ATTEMPTS = 3
+CUPS_FRONTEND_RETRY_DELAY = 0.5
 SUPPORTED_MIME_TYPES = "application/pdf,image/jpeg,image/png,image/pwg-raster,image/urf"
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -83,6 +85,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--no-airprint-advertise",
         action="store_true",
         help="Do not publish an explicit AirPrint _universal DNS-SD service when --mode=cups.",
+    )
+    serve.add_argument(
+        "--allow-missing-upstream",
+        action="store_true",
+        help="Start safely while the upstream queue is unavailable; real jobs remain fail-closed.",
     )
     serve.add_argument("--port", type=int, default=DEFAULT_PORT, help="IPP port for the local proxy.")
     serve.add_argument("--spool", type=Path, default=default_spool_dir(), help="Directory for ippeveprinter spool files.")
@@ -175,6 +182,11 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Do not publish an explicit AirPrint _universal DNS-SD service when --mode=cups.",
     )
+    launch_agent.add_argument(
+        "--allow-missing-upstream",
+        action="store_true",
+        help="Start safely while the upstream queue is unavailable.",
+    )
     launch_agent.add_argument("--port", type=int, default=DEFAULT_PORT, help="IPP port for the local proxy.")
     launch_agent.add_argument("--label", default="com.hundred-percent-print.server", help="LaunchAgent label.")
     launch_agent.add_argument("--spool", type=Path, default=default_spool_dir(), help="Directory for server spool files.")
@@ -211,10 +223,17 @@ def cmd_discover(args: argparse.Namespace) -> int:
 
 
 def cmd_serve(args: argparse.Namespace) -> int:
-    if not destination_exists(args.upstream):
+    upstream_exists = destination_exists(args.upstream)
+    if not upstream_exists and not getattr(args, "allow_missing_upstream", False):
         print(f"Upstream CUPS destination not found: {args.upstream}", file=sys.stderr)
         print("Run `hundred-percent-print discover` to list available queues.", file=sys.stderr)
         return 2
+    if not upstream_exists:
+        print(
+            f"WARNING: upstream CUPS destination {args.upstream!r} is unavailable; "
+            "the server will start, but real jobs will be rejected until it appears.",
+            file=sys.stderr,
+        )
 
     settings = settings_from_args(args, upstream=args.upstream)
     args.spool.mkdir(parents=True, exist_ok=True)
@@ -393,7 +412,7 @@ def cmd_self_test(args: argparse.Namespace) -> int:
             "--forward-dry-run",
         ]
         if args.mode == "cups":
-            command.extend(["--cups-frontend-queue", cups_queue])
+            command.extend(["--cups-frontend-queue", cups_queue, "--no-airprint-advertise"])
         if args.page_size:
             command.extend(["--page-size", args.page_size])
         if args.resolution:
@@ -493,6 +512,8 @@ def launch_agent_plist(args: argparse.Namespace) -> dict[str, object]:
         program_args.extend(["--airprint-name", args.airprint_name])
         if args.no_airprint_advertise:
             program_args.append("--no-airprint-advertise")
+    if getattr(args, "allow_missing_upstream", False):
+        program_args.append("--allow-missing-upstream")
     if args.page_size:
         program_args.extend(["--page-size", args.page_size])
     if args.resolution:
@@ -659,11 +680,16 @@ def cups_frontend_commands(
 
 def configure_cups_frontend(queue: str, description: str, backend_port: int, settings: PrintSettings) -> None:
     for command in cups_frontend_commands(queue, description, backend_port, settings):
-        result = subprocess.run(command, capture_output=True, text=True, check=False)
-        if result.returncode != 0:
+        for attempt in range(1, CUPS_FRONTEND_RETRY_ATTEMPTS + 1):
+            result = subprocess.run(command, capture_output=True, text=True, check=False)
+            if result.returncode == 0:
+                break
             stderr = result.stderr.strip()
             stdout = result.stdout.strip()
             details = stderr or stdout or f"exit status {result.returncode}"
+            if "Bad file descriptor" in details and attempt < CUPS_FRONTEND_RETRY_ATTEMPTS:
+                time.sleep(CUPS_FRONTEND_RETRY_DELAY)
+                continue
             raise RuntimeError(f"CUPS front-end command failed: {shlex.join(command)}\n{details}")
 
 

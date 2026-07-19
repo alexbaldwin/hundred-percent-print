@@ -19,6 +19,8 @@ services:
       HPP_PAGE_SIZE: "Letter"
       HPP_AIRPRINT_NAME: "100 Percent Pattern Print SAFE"
       HPP_KEEP_SPOOL: "1"
+      HPP_ALLOW_OFFLINE_START: "1"
+      HPP_UPSTREAM_RETRY_SECONDS: "30"
     volumes:
       - ./data:/data
     networks:

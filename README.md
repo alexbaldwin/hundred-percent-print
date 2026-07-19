@@ -23,6 +23,8 @@ The forwarder also validates incoming PDF page size before forwarding. For Lette
 
 The forwarder fails closed. Empty files, malformed PDFs, unsupported content types, and non-PDF documents are rejected before they reach the Canon queue. Real print jobs also preflight the upstream CUPS destination before running `lp`; if the Canon queue is missing, disabled, or not accepting requests, the job log records `status=upstream-unavailable` and no Canon job is queued.
 
+Docker deployments can opt into `HPP_ALLOW_OFFLINE_START=1`. This keeps AirPrint discovery available while the physical printer is powered off, retries driverless Canon queue setup in the background, and continues rejecting real jobs until that queue is ready. Offline startup does not weaken the forwarder's upstream preflight.
+
 ## Quick Start
 
 Run from this repo without installing into system Python:
@@ -129,6 +131,8 @@ The fallback host-network template is available at:
 ```text
 deploy/compose.synology-host.yml
 ```
+
+Host mode publishes AirPrint through DSM's existing Avahi daemon using a read-only bind mount of the host system D-Bus socket. Macvlan mode runs its own isolated Avahi daemon and does not need host D-Bus access.
 
 Persist `/data` on the NAS. The container writes structured job events to `/data/jobs.jsonl`, keeps received spool files under `/data/spool` when `HPP_KEEP_SPOOL=1`, and writes CUPS logs under `/data/cups-logs`.
 

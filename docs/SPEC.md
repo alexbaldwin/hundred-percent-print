@@ -50,6 +50,9 @@ For Synology/NAS deployment, the supported package is a Docker container that ru
 23. The Docker entrypoint starts D-Bus, Avahi, CUPS, configures the upstream CUPS queue from `HPP_UPSTREAM_DEVICE_URI`, and fails before advertising if the upstream queue cannot be configured.
 24. The Docker deployment persists structured job logs, preserved spool files, and CUPS logs under `/data`.
 25. The Synology deployment guide documents macvlan networking as the preferred AirPrint/mDNS path and host networking as a fallback.
+26. NAS deployments may start while the physical printer is offline only when explicitly configured; they retry upstream queue creation and reject real jobs until the queue is available.
+27. Container restarts clear stale Avahi runtime PID state before starting a new daemon instance.
+28. Host-network deployments publish through DSM's existing Avahi daemon over the mounted system D-Bus socket; they do not start a second mDNS daemon in the host namespace.
 
 ## Non-Goals
 

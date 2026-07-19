@@ -42,6 +42,22 @@ class PackagingTests(unittest.TestCase):
         self.assertIn("ghcr.io/alexbaldwin/hundred-percent-print:latest", compose)
         self.assertNotIn("build:", compose)
 
+    def test_synology_host_mode_recovers_from_offline_printer_and_stale_avahi(self) -> None:
+        compose = (REPO_ROOT / "deploy" / "compose.synology-host.yml").read_text(encoding="utf-8")
+        entrypoint = (REPO_ROOT / "docker" / "entrypoint.sh").read_text(encoding="utf-8")
+
+        self.assertIn("network_mode: host", compose)
+        self.assertIn('HPP_ALLOW_OFFLINE_START: "1"', compose)
+        self.assertIn('HPP_START_AVAHI: "0"', compose)
+        self.assertIn("/run/dbus/system_bus_socket:/run/dbus/system_bus_socket:ro", compose)
+        self.assertIn("retry_upstream_queue", entrypoint)
+        self.assertIn("rm -f /run/avahi-daemon/pid", entrypoint)
+        self.assertNotIn('-p "$HPP_UPSTREAM_QUEUE" \\\n            -E', entrypoint)
+        self.assertIn('cupsdisable "$HPP_UPSTREAM_QUEUE"', entrypoint)
+        self.assertIn('cupsreject "$HPP_UPSTREAM_QUEUE"', entrypoint)
+        self.assertIn("require_positive_integer HPP_UPSTREAM_RETRY_SECONDS", entrypoint)
+        self.assertIn("require_positive_integer HPP_UPSTREAM_SETUP_TIMEOUT", entrypoint)
+
     def test_publish_workflow_builds_intel_and_arm_images(self) -> None:
         workflow = (REPO_ROOT / ".github" / "workflows" / "publish-container.yml").read_text(
             encoding="utf-8"

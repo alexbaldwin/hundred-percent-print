@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path, PurePath
@@ -9,6 +10,8 @@ from unittest.mock import patch
 from hundred_percent_print.cli import (
     airprint_advertise_commands,
     airprint_txt_records,
+    cmd_serve,
+    configure_cups_frontend,
     cups_frontend_commands,
     env_for_settings,
     ippeveprinter_command,
@@ -18,6 +21,78 @@ from hundred_percent_print.options import PrintSettings
 
 
 class CliTests(unittest.TestCase):
+    def test_cups_frontend_configuration_retries_transient_command_failure(self) -> None:
+        settings = PrintSettings(upstream_queue="Canon_TR150_series", media="Letter")
+        failed = subprocess.CompletedProcess(
+            args=["lpadmin"], returncode=1, stdout="", stderr="Bad file descriptor"
+        )
+        succeeded = subprocess.CompletedProcess(
+            args=["cups"], returncode=0, stdout="", stderr=""
+        )
+
+        with (
+            patch(
+                "hundred_percent_print.cli.subprocess.run",
+                side_effect=[succeeded, failed, succeeded, succeeded, succeeded, succeeded],
+            ) as run,
+            patch("hundred_percent_print.cli.time.sleep") as sleep,
+        ):
+            configure_cups_frontend(
+                "Hundred_Percent_Patterns",
+                "100 Percent Pattern Print",
+                8799,
+                settings,
+            )
+
+        self.assertEqual(run.call_count, 6)
+        sleep.assert_called_once()
+
+    def _serve_args(self, temp_dir: str, *, allow_missing_upstream: bool) -> argparse.Namespace:
+        return argparse.Namespace(
+            upstream="Missing_Printer",
+            allow_missing_upstream=allow_missing_upstream,
+            media="Letter",
+            page_size=None,
+            color_model="RGB",
+            quality="High",
+            media_type="auto",
+            resolution=None,
+            extra_options=None,
+            spool=Path(temp_dir) / "spool",
+            no_job_log=True,
+            job_log=Path(temp_dir) / "jobs.jsonl",
+            verbose=1,
+            port=8799,
+            keep_spool=False,
+            name="100 Percent Pattern Print",
+            backend_name="Hundred Percent Print Private Backend",
+            mode="direct",
+            forward_dry_run=True,
+            dry_run=True,
+            no_airprint_advertise=True,
+            cups_frontend_queue="Hundred_Percent_Patterns",
+            airprint_name="100 Percent Pattern Print SAFE",
+        )
+
+    def test_serve_can_start_without_upstream_when_explicitly_allowed(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            args = self._serve_args(temp_dir, allow_missing_upstream=True)
+            with (
+                patch("hundred_percent_print.cli.destination_exists", return_value=False),
+                patch("hundred_percent_print.cli.forwarder_path", return_value=Path("/tmp/hpp-forward-job")),
+            ):
+                result = cmd_serve(args)
+
+        self.assertEqual(result, 0)
+
+    def test_serve_rejects_missing_upstream_by_default(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            args = self._serve_args(temp_dir, allow_missing_upstream=False)
+            with patch("hundred_percent_print.cli.destination_exists", return_value=False):
+                result = cmd_serve(args)
+
+        self.assertEqual(result, 2)
+
     def test_env_for_settings_includes_dry_run_and_job_log(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             job_log = Path(temp_dir) / "jobs.jsonl"
@@ -127,6 +202,7 @@ class CliTests(unittest.TestCase):
             backend_name="Hundred Percent Print Private Backend",
             airprint_name="100 Percent Pattern Print SAFE",
             no_airprint_advertise=False,
+            allow_missing_upstream=False,
             port=8631,
             spool=Path("/tmp/hpp-spool"),
             job_log=Path("/tmp/hpp/jobs.jsonl"),
