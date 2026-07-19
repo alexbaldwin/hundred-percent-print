@@ -1,0 +1,39 @@
+# Recommended Synology deployment.
+#
+# Edit the IP addresses and parent interface before deploying:
+# - HPP_UPSTREAM_DEVICE_URI: the Canon printer's stable LAN IPP endpoint
+# - ipv4_address: the stable LAN IP to reserve for this container
+# - parent: the Synology LAN interface, commonly eth0 or ovs_eth0
+
+name: hundred-percent-print
+
+services:
+  hundred-percent-print:
+    image: ghcr.io/alexbaldwin/hundred-percent-print:latest
+    build:
+      context: ..
+    container_name: hundred-percent-print
+    restart: unless-stopped
+    environment:
+      HPP_UPSTREAM_DEVICE_URI: "ipp://192.168.1.50/ipp/print"
+      HPP_UPSTREAM_QUEUE: "Canon_TR150_series"
+      HPP_MEDIA: "Letter"
+      HPP_PAGE_SIZE: "Letter"
+      HPP_AIRPRINT_NAME: "100 Percent Pattern Print SAFE"
+      HPP_KEEP_SPOOL: "1"
+    volumes:
+      - ./data:/data
+    networks:
+      hpp_lan:
+        ipv4_address: 192.168.1.245
+
+networks:
+  hpp_lan:
+    driver: macvlan
+    driver_opts:
+      parent: eth0
+    ipam:
+      config:
+        - subnet: 192.168.1.0/24
+          gateway: 192.168.1.1
+          ip_range: 192.168.1.240/29

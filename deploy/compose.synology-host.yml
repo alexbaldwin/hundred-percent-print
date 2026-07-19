@@ -1,0 +1,25 @@
+# Fallback Synology deployment.
+#
+# Prefer compose.synology-macvlan.yml when possible. Host networking shares
+# the NAS network namespace, so it can conflict with any existing service that
+# already uses CUPS port 631 or mDNS port 5353.
+
+name: hundred-percent-print
+
+services:
+  hundred-percent-print:
+    image: ghcr.io/alexbaldwin/hundred-percent-print:latest
+    build:
+      context: ..
+    container_name: hundred-percent-print
+    network_mode: host
+    restart: unless-stopped
+    environment:
+      HPP_UPSTREAM_DEVICE_URI: "ipp://192.168.1.50/ipp/print"
+      HPP_UPSTREAM_QUEUE: "Canon_TR150_series"
+      HPP_MEDIA: "Letter"
+      HPP_PAGE_SIZE: "Letter"
+      HPP_AIRPRINT_NAME: "100 Percent Pattern Print SAFE"
+      HPP_KEEP_SPOOL: "1"
+    volumes:
+      - ./data:/data

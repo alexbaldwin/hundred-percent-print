@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hundred-percent-print"
+version = "0.1.0"
+description = "Local exact-scale AirPrint/CUPS forwarding tools for pattern printing"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "Alex Baldwin" }]
+keywords = ["airprint", "cups", "printing", "docker", "synology", "patterns"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: MacOS",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Printing",
+]
+
+[project.scripts]
+hundred-percent-print = "hundred_percent_print.cli:main"
+hpp-forward-job = "hundred_percent_print.forward_job:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
