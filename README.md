@@ -132,6 +132,8 @@ The fallback host-network template is available at:
 deploy/compose.synology-host.yml
 ```
 
+Host mode publishes AirPrint through DSM's existing Avahi daemon using a read-only bind mount of the host system D-Bus socket. Macvlan mode runs its own isolated Avahi daemon and does not need host D-Bus access.
+
 Persist `/data` on the NAS. The container writes structured job events to `/data/jobs.jsonl`, keeps received spool files under `/data/spool` when `HPP_KEEP_SPOOL=1`, and writes CUPS logs under `/data/cups-logs`.
 
 ## Defensive Behavior

@@ -21,5 +21,9 @@ services:
       HPP_KEEP_SPOOL: "1"
       HPP_ALLOW_OFFLINE_START: "1"
       HPP_UPSTREAM_RETRY_SECONDS: "30"
+      HPP_START_AVAHI: "0"
     volumes:
       - ./data:/data
+      # Publish through DSM's existing Avahi daemon instead of starting a
+      # second mDNS responder in the shared host network namespace.
+      - /run/dbus/system_bus_socket:/run/dbus/system_bus_socket:ro

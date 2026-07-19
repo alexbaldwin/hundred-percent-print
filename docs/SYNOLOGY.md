@@ -73,7 +73,7 @@ docker compose -f deploy/compose.synology-macvlan.yml pull
 docker compose -f deploy/compose.synology-macvlan.yml up -d
 ```
 
-If macvlan is not possible, use `deploy/compose.synology-host.yml`. Host networking can work, but it shares the NAS ports; if CUPS or mDNS is already bound on the NAS, the container should fail early instead of advertising a broken AirPrint printer.
+If macvlan is not possible, use `deploy/compose.synology-host.yml`. The host template mounts DSM's system D-Bus socket and sets `HPP_START_AVAHI=0`, allowing the container's advertisement commands to publish through DSM's existing Avahi daemon instead of starting a conflicting second mDNS responder. CUPS port `631` must still be free on the NAS.
 
 ## 5. Verify Before Printing Patterns
 
@@ -125,6 +125,7 @@ HPP_AIRPRINT_NAME=100 Percent Pattern Print SAFE
 HPP_KEEP_SPOOL=1
 HPP_ALLOW_OFFLINE_START=1
 HPP_UPSTREAM_RETRY_SECONDS=30
+HPP_START_AVAHI=0
 HPP_FORWARD_DRY_RUN=1
 HPP_EXTRA_OPTIONS=InputSlot=Rear
 ```
@@ -136,6 +137,8 @@ With `HPP_ALLOW_OFFLINE_START=1`, the AirPrint service can start while the physi
 ## Security
 
 This service is intended for a trusted home LAN only. Do not publish container port 631 to the internet and do not put this container behind a public reverse proxy. The service accepts print documents from LAN clients, so keep the image updated and keep the NAS firewall scoped to your local network.
+
+The host-network template mounts `/run/dbus/system_bus_socket` so it can register AirPrint with DSM's Avahi daemon. Treat the container image as trusted host software when using this mode. Macvlan mode does not require this host socket mount.
 
 ## References
 

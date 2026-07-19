@@ -48,6 +48,8 @@ class PackagingTests(unittest.TestCase):
 
         self.assertIn("network_mode: host", compose)
         self.assertIn('HPP_ALLOW_OFFLINE_START: "1"', compose)
+        self.assertIn('HPP_START_AVAHI: "0"', compose)
+        self.assertIn("/run/dbus/system_bus_socket:/run/dbus/system_bus_socket:ro", compose)
         self.assertIn("retry_upstream_queue", entrypoint)
         self.assertIn("rm -f /run/avahi-daemon/pid", entrypoint)
         self.assertIn("require_positive_integer HPP_UPSTREAM_RETRY_SECONDS", entrypoint)
