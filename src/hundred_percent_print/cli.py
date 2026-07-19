@@ -31,6 +31,8 @@ DEFAULT_PORT = 8799
 DEFAULT_FRONTEND_QUEUE = "Hundred_Percent_Patterns"
 DEFAULT_BACKEND_SERVICE_NAME = "Hundred Percent Print Private Backend"
 DEFAULT_AIRPRINT_SERVICE_NAME = "100 Percent Pattern Print SAFE"
+CUPS_FRONTEND_RETRY_ATTEMPTS = 3
+CUPS_FRONTEND_RETRY_DELAY = 0.5
 SUPPORTED_MIME_TYPES = "application/pdf,image/jpeg,image/png,image/pwg-raster,image/urf"
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -678,11 +680,16 @@ def cups_frontend_commands(
 
 def configure_cups_frontend(queue: str, description: str, backend_port: int, settings: PrintSettings) -> None:
     for command in cups_frontend_commands(queue, description, backend_port, settings):
-        result = subprocess.run(command, capture_output=True, text=True, check=False)
-        if result.returncode != 0:
+        for attempt in range(1, CUPS_FRONTEND_RETRY_ATTEMPTS + 1):
+            result = subprocess.run(command, capture_output=True, text=True, check=False)
+            if result.returncode == 0:
+                break
             stderr = result.stderr.strip()
             stdout = result.stdout.strip()
             details = stderr or stdout or f"exit status {result.returncode}"
+            if "Bad file descriptor" in details and attempt < CUPS_FRONTEND_RETRY_ATTEMPTS:
+                time.sleep(CUPS_FRONTEND_RETRY_DELAY)
+                continue
             raise RuntimeError(f"CUPS front-end command failed: {shlex.join(command)}\n{details}")
 
 

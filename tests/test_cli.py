@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path, PurePath
@@ -10,6 +11,7 @@ from hundred_percent_print.cli import (
     airprint_advertise_commands,
     airprint_txt_records,
     cmd_serve,
+    configure_cups_frontend,
     cups_frontend_commands,
     env_for_settings,
     ippeveprinter_command,
@@ -19,6 +21,32 @@ from hundred_percent_print.options import PrintSettings
 
 
 class CliTests(unittest.TestCase):
+    def test_cups_frontend_configuration_retries_transient_command_failure(self) -> None:
+        settings = PrintSettings(upstream_queue="Canon_TR150_series", media="Letter")
+        failed = subprocess.CompletedProcess(
+            args=["lpadmin"], returncode=1, stdout="", stderr="Bad file descriptor"
+        )
+        succeeded = subprocess.CompletedProcess(
+            args=["cups"], returncode=0, stdout="", stderr=""
+        )
+
+        with (
+            patch(
+                "hundred_percent_print.cli.subprocess.run",
+                side_effect=[succeeded, failed, succeeded, succeeded, succeeded, succeeded],
+            ) as run,
+            patch("hundred_percent_print.cli.time.sleep") as sleep,
+        ):
+            configure_cups_frontend(
+                "Hundred_Percent_Patterns",
+                "100 Percent Pattern Print",
+                8799,
+                settings,
+            )
+
+        self.assertEqual(run.call_count, 6)
+        sleep.assert_called_once()
+
     def _serve_args(self, temp_dir: str, *, allow_missing_upstream: bool) -> argparse.Namespace:
         return argparse.Namespace(
             upstream="Missing_Printer",
