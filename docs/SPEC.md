@@ -53,6 +53,7 @@ For Synology/NAS deployment, the supported package is a Docker container that ru
 26. NAS deployments may start while the physical printer is offline only when explicitly configured; they retry upstream queue creation and reject real jobs until the queue is available.
 27. Container restarts clear stale Avahi runtime PID state before starting a new daemon instance.
 28. Host-network deployments publish through DSM's existing Avahi daemon over the mounted system D-Bus socket; they do not start a second mDNS daemon in the host namespace.
+29. CUPS automatic DNS-SD browsing is disabled while remote IPP sharing remains enabled, so clients see only the explicitly named exact-scale AirPrint service.
 
 ## Non-Goals
 

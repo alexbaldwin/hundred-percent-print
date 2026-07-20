@@ -151,7 +151,10 @@ class CliTests(unittest.TestCase):
             PrintSettings(upstream_queue="Canon_TR150_series", media="Letter"),
         )
 
-        self.assertEqual(commands[0], ["cupsctl", "--share-printers", "--remote-any"])
+        self.assertEqual(
+            commands[0],
+            ["cupsctl", "--share-printers", "--remote-any", "BrowseLocalProtocols=none"],
+        )
         lpadmin = commands[1]
         self.assertIn("Hundred_Percent_Patterns", lpadmin)
         self.assertIn("ipp://127.0.0.1:8631/ipp/print", lpadmin)
