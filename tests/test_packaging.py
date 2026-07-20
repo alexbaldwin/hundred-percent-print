@@ -50,6 +50,7 @@ class PackagingTests(unittest.TestCase):
         self.assertIn('HPP_ALLOW_OFFLINE_START: "1"', compose)
         self.assertIn('HPP_START_AVAHI: "0"', compose)
         self.assertIn("/run/dbus/system_bus_socket:/run/dbus/system_bus_socket:ro", compose)
+        self.assertIn("BrowseLocalProtocols=none", entrypoint)
         self.assertIn("retry_upstream_queue", entrypoint)
         self.assertIn("rm -f /run/avahi-daemon/pid", entrypoint)
         self.assertNotIn('-p "$HPP_UPSTREAM_QUEUE" \\\n            -E', entrypoint)

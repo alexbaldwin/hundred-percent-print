@@ -73,7 +73,7 @@ docker compose -f deploy/compose.synology-macvlan.yml pull
 docker compose -f deploy/compose.synology-macvlan.yml up -d
 ```
 
-If macvlan is not possible, use `deploy/compose.synology-host.yml`. The host template mounts DSM's system D-Bus socket and sets `HPP_START_AVAHI=0`, allowing the container's advertisement commands to publish through DSM's existing Avahi daemon instead of starting a conflicting second mDNS responder. CUPS port `631` must still be free on the NAS.
+If macvlan is not possible, use `deploy/compose.synology-host.yml`. The host template mounts DSM's system D-Bus socket and sets `HPP_START_AVAHI=0`, allowing the container's advertisement commands to publish through DSM's existing Avahi daemon instead of starting a conflicting second mDNS responder. The container disables CUPS's automatic DNS-SD advertisement so iOS sees only the explicitly named `100 Percent Pattern Print SAFE` service. CUPS port `631` must still be free on the NAS.
 
 ## 5. Verify Before Printing Patterns
 

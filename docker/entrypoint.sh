@@ -63,7 +63,8 @@ start_avahi() {
 start_cups() {
     /usr/sbin/cupsd || die "could not start cupsd"
     wait_for_cups || die "cupsd did not become ready"
-    cupsctl --share-printers --remote-any >/dev/null || die "could not enable CUPS printer sharing"
+    cupsctl --share-printers --remote-any BrowseLocalProtocols=none >/dev/null \
+        || die "could not enable CUPS printer sharing without duplicate DNS-SD advertising"
 }
 
 hold_upstream_queue() {

@@ -321,7 +321,7 @@ def cmd_configure_cups(args: argparse.Namespace) -> int:
 
     settings = settings_from_args(args, upstream=args.queue)
     commands = [
-        ["cupsctl", "--share-printers"],
+        ["cupsctl", "--share-printers", "BrowseLocalProtocols=none"],
         [
             "lpadmin",
             "-p",
@@ -652,7 +652,7 @@ def cups_frontend_commands(
 ) -> list[list[str]]:
     backend_uri = f"ipp://127.0.0.1:{backend_port}/ipp/print"
     return [
-        ["cupsctl", "--share-printers", "--remote-any"],
+        ["cupsctl", "--share-printers", "--remote-any", "BrowseLocalProtocols=none"],
         [
             "lpadmin",
             "-p",
